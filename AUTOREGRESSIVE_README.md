@@ -23,7 +23,7 @@ Add these parameters to your JSON configuration file:
 ```json
 {
     "enable_autoregressive": true,
-    "chunk_overlap": 5
+    "chunk_overlap": 1
 }
 ```
 
@@ -39,7 +39,7 @@ Add these parameters to your JSON configuration file:
     "guidance": 3,
     "seed": 2025,
     "enable_autoregressive": true,
-    "chunk_overlap": 5,
+    "chunk_overlap": 1,
     "front_wide": {
         "input_path": "path/to/input_video.mp4",
         "control_path": "path/to/control_video.mp4"
@@ -74,12 +74,6 @@ The implementation consists of three main methods:
 1. `_generate_autoregressive()`: Main orchestration method
 2. `_create_chunk_batch()`: Creates batch data for each chunk
 3. `_update_input_video_with_generated()`: Updates input videos with generated frames
-
-### Memory Considerations
-
-- Full videos are loaded into memory
-- Each chunk generates a 29-frame output
-- Memory usage scales with total video length and number of views
 
 ## Usage
 
@@ -116,25 +110,4 @@ The system generates several output files:
 ## Performance Notes
 
 - Generation time scales linearly with the number of chunks
-- Overlap affects both quality and generation time
-- Higher overlap (3-5 frames) recommended for smoother transitions
-- Single GPU mode recommended for testing; multi-GPU support maintained
-
-## Limitations
-
-- Requires sufficient GPU memory for full video loading
-- Generation quality may degrade over very long sequences
-- Overlap frames are duplicated in processing (computational overhead)
-
-## Troubleshooting
-
-1. **Memory Issues**: Reduce video resolution or length
-2. **Quality Degradation**: Increase overlap or reduce chunk count
-3. **Configuration Errors**: Ensure all video paths exist and are valid
-
-## Future Improvements
-
-- Dynamic overlap adjustment based on content
-- Memory-efficient streaming for very long videos
-- Quality preservation techniques for long sequences
-- Parallel chunk processing optimization
+- Use with either 1 or 5 overlap (corresponds to 1 or 2 latent).
