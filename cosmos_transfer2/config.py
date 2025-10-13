@@ -3,8 +3,9 @@ import os
 from typing import Literal
 import json
 from cosmos_transfer2._src.imaginaire.utils.checkpoint_db import get_checkpoint_by_uuid
-from cosmos_transfer2._src.imaginaire.utils.validator import String, Int, Bool, Path, Dict, Float
+from cosmos_transfer2._src.imaginaire.utils.validator import String, Int, Bool, Path, Dict, Float, MultipleOf
 from cosmos_transfer2._src.imaginaire.utils.validator_params import ValidatorParams
+from cosmos_transfer2._src.predict2_multiview.configs.vid2vid.defaults.conditioner import ConditionLocation
 
 DEFAULT_NEGATIVE_PROMPT = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
 
@@ -146,9 +147,13 @@ class MultiviewParams(ValidatorParams):
 
     guidance = Int(3, min=0, max=7)
     seed = Int(0)
-    n_views = Int(7, hidden=True)
+    n_views = Int(7, hidden=False)
     num_conditional_frames = Int(1, min=0, max=2)
     control_weight = Float(1.0, min=0.0, max=1.0, step=0.01)
+    num_steps = Int(35, min=1, max=100)
+    # Autoregressive generation parameters
+    enable_autoregressive = Bool(default=False)
+    chunk_overlap = Int(1, min=1, max=5)  # Number of overlapping frames between chunks
 
     front_wide = Dict(default={})
     rear = Dict(default={})
@@ -158,7 +163,10 @@ class MultiviewParams(ValidatorParams):
     cross_right = Dict(default={})
     front_tele = Dict(default={})
     fps = Int(default=10)
-
+    num_video_frames_loaded_per_view = Int(default=29, min=1, max=1000)
+    num_video_frames_per_view = Int(default=29, min=1, max=1000)
+    no_cond_rear_tele = Bool(default=False)
+    
     @property
     def input_and_control_paths(self):
         input_and_control_paths = {

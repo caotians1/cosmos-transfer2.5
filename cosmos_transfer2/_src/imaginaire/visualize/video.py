@@ -18,6 +18,7 @@ from typing import IO, Any, Union
 import cv2
 import numpy as np
 import torch
+import math
 from einops import rearrange
 from PIL import Image as PILImage
 from torch import Tensor
@@ -95,3 +96,66 @@ def save_img_or_video(
             fps=fps,
             **kwargs,
         )
+
+
+def create_video_grid(video_tensors, padding=0, n_row=2):
+    """
+    Arrange a list of PyTorch video tensors into a grid. When number of videos is not divisible by n_row, fit videos in
+     last row with black padding on the sides.
+
+    Args:
+        video_tensors (list): List of PyTorch tensors with shape [T, C, H, W] where:
+            - T is the number of frames
+            - C is the number of channels (typically 3 for RGB)
+            - H is the height of each frame
+            - W is the width of each frame
+        padding (int, optional): Padding between videos in pixels. Defaults to 0.
+        n_row (int, optional): number of rows
+
+    Returns:
+        torch.Tensor: A tensor of shape [T, C, grid_H, grid_W] representing the video grid
+    """
+
+    # Check if all videos have the same number of frames, channels, and dimensions
+    num_frames = video_tensors[0].shape[0]
+    num_channels = video_tensors[0].shape[1]
+    height = video_tensors[0].shape[2]
+    width = video_tensors[0].shape[3]
+
+    for i, video in enumerate(video_tensors):
+        if video.shape[0] != num_frames:
+            raise ValueError(f"Video {i} has {video.shape[0]} frames, expected {num_frames}")
+        if video.shape[1] != num_channels:
+            raise ValueError(f"Video {i} has {video.shape[1]} channels, expected {num_channels}")
+
+    # Calculate grid dimensions
+    n_vids = len(video_tensors)
+    grid_height = n_row * height + (n_row - 1) * padding
+    n_col = math.ceil(n_vids / n_row)
+    grid_width = n_col * width + (n_col - 1) * padding
+    n_last_row = n_vids - (n_row - 1) * n_col
+
+    # Create an empty grid filled with zeros (black)
+    grid = torch.zeros(
+        (num_frames, num_channels, grid_height, grid_width),
+        dtype=video_tensors[0].dtype,
+        device=video_tensors[0].device,
+    )
+
+    # Place videos on the top row (4 videos)
+    for i in range(n_row):
+        if i == (n_row - 1):
+            nc = n_last_row
+            # Calculate the starting position for the bottom row to center the remaining videos
+            bottom_row_width = nc * width + (nc - 1) * padding
+            left_padding = (grid_width - bottom_row_width) // 2
+        else:
+            nc = n_col
+            left_padding = 0
+        for j in range(nc):
+            vid = i * n_col + j
+            y_offset = i * (height + padding)
+            x_offset = left_padding + j * (width + padding)
+            grid[:, :, y_offset : y_offset + height, x_offset : x_offset + width] = video_tensors[vid]
+
+    return grid

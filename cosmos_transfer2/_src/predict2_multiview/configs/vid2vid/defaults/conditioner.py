@@ -57,6 +57,7 @@ class ConditionLocation(Enum):
     REF_CAM = "ref_cam"
     ANY_CAM = "any_cam"
     FIRST_RANDOM_N = "first_random_n"
+    FIRST_FRAMES_EXCEPT_TEL = "first_frames_except_tel"
 
 
 class ConditionLocationListValidator(Validator):
@@ -265,6 +266,19 @@ class MultiViewCondition(Video2WorldCondition):
             condition_video_input_mask_B_C_V_T_H_W = self.enable_first_random_n_condition(
                 condition_video_input_mask_B_C_V_T_H_W, num_conditional_frames_per_view_B
             )
+        elif ConditionLocation.FIRST_FRAMES_EXCEPT_TEL in condition_locations:
+            num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32) * num_conditional_frames_per_view
+            assert condition_video_input_mask_B_C_V_T_H_W.ndim == 6, (
+                "condition_video_input_mask_B_C_V_T_H_W must have 6 dimensions"
+            )
+            B, _, _, _, _, _ = condition_video_input_mask_B_C_V_T_H_W.shape
+            copy_condition_video_input_mask_B_C_V_T_H_W = condition_video_input_mask_B_C_V_T_H_W.clone()
+            for idx in range(B):
+                copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, :, : num_conditional_frames_per_view_B[idx]] = 1
+                copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, -1, :num_conditional_frames_per_view_B[idx]] = 0
+            condition_video_input_mask_B_C_V_T_H_W = copy_condition_video_input_mask_B_C_V_T_H_W
+            print(f"condition_video_input_mask_B_C_V_T_H_W: {condition_video_input_mask_B_C_V_T_H_W[:,0,:,:,0,0]}")
+
         if view_condition_dropout_max > 0:
             random.shuffle(views_eligible_for_dropout)
             n_views_to_dropout = random.randint(0, view_condition_dropout_max)
@@ -325,6 +339,7 @@ class MultiViewCondition(Video2WorldCondition):
         is_cfg_conditional: bool = True,
         num_conditional_frames_per_view: int = 1,
     ) -> "MultiViewCondition":
+        
         _condition = self.set_video_condition(
             state_t=self.state_t,
             gt_frames=self.gt_frames,
