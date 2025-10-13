@@ -162,6 +162,7 @@ class ControlVideo2WorldInference:
         data_batch,
         guidance: float = 7.0,
         seed: int = 1,
+        num_steps: int = 35,
     ):
         data_batch = to_model_input(data_batch, self.model)
         if self.model.config.text_encoder_config is not None and self.model.config.text_encoder_config.compute_online:
@@ -176,6 +177,7 @@ class ControlVideo2WorldInference:
             n_sample=x0.shape[0],
             seed=seed,  # Fixed seed for reproducibility
             is_negative_prompt=True,
+            num_steps=num_steps,
         )
         # (bsz = 1, c = 3, t = n_camera * t, h, w)
         return self.model.decode(sample).cpu()
