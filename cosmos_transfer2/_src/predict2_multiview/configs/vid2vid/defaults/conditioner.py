@@ -267,7 +267,10 @@ class MultiViewCondition(Video2WorldCondition):
                 condition_video_input_mask_B_C_V_T_H_W, num_conditional_frames_per_view_B
             )
         elif ConditionLocation.FIRST_FRAMES_EXCEPT_TEL in condition_locations:
-            num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32) * num_conditional_frames_per_view
+            if num_conditional_frames_per_view is None:
+                num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32)
+            else:
+                num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32) * num_conditional_frames_per_view
             assert condition_video_input_mask_B_C_V_T_H_W.ndim == 6, (
                 "condition_video_input_mask_B_C_V_T_H_W must have 6 dimensions"
             )
@@ -277,7 +280,7 @@ class MultiViewCondition(Video2WorldCondition):
                 copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, :, : num_conditional_frames_per_view_B[idx]] = 1
                 copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, -1, :num_conditional_frames_per_view_B[idx]] = 0
             condition_video_input_mask_B_C_V_T_H_W = copy_condition_video_input_mask_B_C_V_T_H_W
-            print(f"condition_video_input_mask_B_C_V_T_H_W: {condition_video_input_mask_B_C_V_T_H_W[:,0,:,:,0,0]}")
+            # print(f"condition_video_input_mask_B_C_V_T_H_W: {condition_video_input_mask_B_C_V_T_H_W[:,0,:,:,0,0]}")
 
         if view_condition_dropout_max > 0:
             random.shuffle(views_eligible_for_dropout)
