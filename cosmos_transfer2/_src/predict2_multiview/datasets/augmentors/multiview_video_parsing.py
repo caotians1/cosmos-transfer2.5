@@ -159,6 +159,7 @@ class MultiViewVideoParsing(VideoParsing):
 
     def __call__(self, data_dict: dict) -> Optional[dict]:
         try:
+            # print("cosmos_transfer2/src/predict2_multiview/datasets/augmentors/multiview_video_parsing.py", data_dict.keys())
             if self.batch_counter % self.gc_every_n == 0:
                 gc.collect()
                 ctypes.CDLL("libc.so.6").malloc_trim(0)

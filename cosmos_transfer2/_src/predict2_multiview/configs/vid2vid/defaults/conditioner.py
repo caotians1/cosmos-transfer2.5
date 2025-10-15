@@ -130,7 +130,7 @@ class MultiViewCondition(Video2WorldCondition):
         ),
         random_min_num_conditional_frames_per_view: Optional[int] = None,
         random_max_num_conditional_frames_per_view: Optional[int] = None,
-        num_conditional_frames_per_view: Optional[int] = None,
+        num_conditional_frames_per_view:  Optional[int | List[int]] = None,
         condition_cam_idx: Optional[int] = None,
         view_condition_dropout_max: int = 0,
         conditional_frames_probs: Optional[Dict[int, float]] = None,
@@ -243,14 +243,28 @@ class MultiViewCondition(Video2WorldCondition):
             ):
                 num_conditional_frames_per_view = random_min_num_conditional_frames_per_view
             if num_conditional_frames_per_view is not None:
-                num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32) * num_conditional_frames_per_view
+                # num_conditional_frames_per_view_B = torch.ones(B, dtype=torch.int32) * num_conditional_frames_per_view
+                if isinstance(num_conditional_frames_per_view, list):
+                    assert len(num_conditional_frames_per_view) == sample_n_views, (
+                        f"num_conditional_frames_per_view must be a list of length {sample_n_views}. Got {num_conditional_frames_per_view=}"
+                    )
+                    log.info(
+                        f"Setting num_conditional_frames_per_view_B_V explicitly from list: {num_conditional_frames_per_view}"
+                    )
+                    num_conditional_frames_per_view_B_V = torch.tensor(
+                        num_conditional_frames_per_view, dtype=torch.int32
+                    ).repeat(B, 1)
+                else:
+                    num_conditional_frames_per_view_B_V = (
+                        torch.ones((B, sample_n_views), dtype=torch.int32) * num_conditional_frames_per_view
+                    )
             elif conditional_frames_probs is not None:
                 # Use weighted sampling based on provided probabilities
                 frames_options = list(conditional_frames_probs.keys())
                 weights = list(conditional_frames_probs.values())
-                num_conditional_frames_per_view_B = torch.tensor(
+                num_conditional_frames_per_view_B_V = torch.tensor(
                     random.choices(frames_options, weights=weights, k=B), dtype=torch.int32
-                )
+                ).repeat(1, sample_n_views)
             else:
                 assert (
                     random_min_num_conditional_frames_per_view is not None
@@ -258,13 +272,13 @@ class MultiViewCondition(Video2WorldCondition):
                 ), (
                     f"random_min_num_conditional_frames_per_view and random_max_num_conditional_frames_per_view must be provided if num_conditional_frames_per_view is None. Got {random_min_num_conditional_frames_per_view=}, {random_max_num_conditional_frames_per_view=}, {num_conditional_frames_per_view=}"
                 )
-                num_conditional_frames_per_view_B = torch.randint(
+                num_conditional_frames_per_view_B_V = torch.randint(
                     random_min_num_conditional_frames_per_view,
                     random_max_num_conditional_frames_per_view + 1,
                     size=(B,),
-                )
+                ).repeat(1, sample_n_views)
             condition_video_input_mask_B_C_V_T_H_W = self.enable_first_random_n_condition(
-                condition_video_input_mask_B_C_V_T_H_W, num_conditional_frames_per_view_B
+                condition_video_input_mask_B_C_V_T_H_W, num_conditional_frames_per_view_B_V
             )
         elif ConditionLocation.FIRST_FRAMES_EXCEPT_TEL in condition_locations:
             if num_conditional_frames_per_view is None:
@@ -315,13 +329,13 @@ class MultiViewCondition(Video2WorldCondition):
         return copy_condition_video_input_mask_B_C_V_T_H_W
 
     def enable_first_random_n_condition(
-        self, condition_video_input_mask_B_C_V_T_H_W: torch.Tensor, num_conditional_frames_per_view_B: torch.Tensor
+        self, condition_video_input_mask_B_C_V_T_H_W: torch.Tensor, num_conditional_frames_per_view_B_V: torch.Tensor
     ):
         """
         Sets condition video input mask to 1 for the first num_conditional_frames_per_view_B frames of each view
         Args:
             condition_video_input_mask_B_C_V_T_H_W: A tensor of shape [B, 1, V, T, H, W]
-            num_conditional_frames_per_view_B: A tensor of shape [B]
+            num_conditional_frames_per_view_B_V: A tensor of shape [B, V]
         Returns:
             A copy of the condition video input mask with the first num_conditional_frames_per_view_B frames of each view set to 1
         """
@@ -331,7 +345,11 @@ class MultiViewCondition(Video2WorldCondition):
         B, _, _, _, _, _ = condition_video_input_mask_B_C_V_T_H_W.shape
         copy_condition_video_input_mask_B_C_V_T_H_W = condition_video_input_mask_B_C_V_T_H_W.clone()
         for idx in range(B):
-            copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, :, : num_conditional_frames_per_view_B[idx]] = 1
+             for view_idx in range(num_conditional_frames_per_view_B_V.shape[1]):
+                copy_condition_video_input_mask_B_C_V_T_H_W[
+                    idx, :, view_idx, : num_conditional_frames_per_view_B_V[idx, view_idx]
+                ] = 1
+            # copy_condition_video_input_mask_B_C_V_T_H_W[idx, :, :, : num_conditional_frames_per_view_B[idx]] = 1
         return copy_condition_video_input_mask_B_C_V_T_H_W
 
     def edit_for_inference(

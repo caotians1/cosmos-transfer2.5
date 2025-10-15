@@ -137,7 +137,6 @@ VIEW_INDEX_DICT = {
     "front_tele": 6,
 }
 
-
 class MultiviewParams(ValidatorParams):
     """All the required values to generate image from text at a given resolution."""
 
@@ -149,6 +148,7 @@ class MultiviewParams(ValidatorParams):
     seed = Int(0)
     n_views = Int(7, hidden=False)
     num_conditional_frames = Int(1, min=0, max=2)
+    num_conditional_frames_per_view = Dict(default={})
     control_weight = Float(1.0, min=0.0, max=1.0, step=0.01)
     num_steps = Int(35, min=1, max=100)
     # Autoregressive generation parameters
@@ -166,7 +166,7 @@ class MultiviewParams(ValidatorParams):
     num_video_frames_loaded_per_view = Int(default=29, min=1, max=1000)
     num_video_frames_per_view = Int(default=29, min=1, max=1000)
     no_cond_rear_tele = Bool(default=False)
-    
+    minimum_start_index = Int(default=3, min=0, max=1000)
     @property
     def input_and_control_paths(self):
         input_and_control_paths = {

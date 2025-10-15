@@ -33,7 +33,7 @@ from cosmos_transfer2._src.transfer2_multiview.datasets.local_dataset import (
 from cosmos_transfer2._src.transfer2_multiview.configs.vid2vid_transfer.defaults.driving import (
     MADS_DRIVING_DATALOADER_CONFIG_PER_RESOLUTION,
 )
-from cosmos_transfer2.config import MODEL_CHECKPOINTS, ModelKey, MultiviewParams
+from cosmos_transfer2.config import MODEL_CHECKPOINTS, ModelKey, MultiviewParams, VIEW_INDEX_DICT
 
 _DEFAULT_CHECKPOINT = MODEL_CHECKPOINTS[ModelKey(variant="drive")]
 NUM_DATALOADER_WORKERS = 8
@@ -88,6 +88,7 @@ class MultiviewInference:
             ]
         driving_dataloader_config.n_views = p.n_views
         driving_dataloader_config.num_video_frames_per_view = p.num_video_frames_per_view
+        driving_dataloader_config.minimum_start_index = p.minimum_start_index
         driving_dataloader_config.num_video_frames_loaded_per_view = p.num_video_frames_loaded_per_view
         prompt, _ = get_prompt_from_path(p.prompt_path, p.prompt)
         # if self.rank0:
@@ -125,8 +126,19 @@ class MultiviewInference:
             
             batch["ai_caption"] = [prompt]
             batch["control_weight"] = p.control_weight
-            batch["num_conditional_frames"] = p.num_conditional_frames
-            
+            if len(p.num_conditional_frames_per_view) > 0:
+                index_view_dict = {}
+                for k,v in VIEW_INDEX_DICT.items():
+                    index_view_dict[v] = k
+                num_conditional_frames_per_view = []
+                for k,v in index_view_dict.items():
+                    if len(num_conditional_frames_per_view) < p.n_views:
+                        num_conditional_frames_per_view.append(p.num_conditional_frames_per_view[v])
+                print(f"num_conditional_frames_per_view: {num_conditional_frames_per_view}")
+                batch["num_conditional_frames"] = num_conditional_frames_per_view
+            else:
+                batch["num_conditional_frames"] = p.num_conditional_frames
+                
             if p.enable_autoregressive:
                 log.info(f"------ Generating video with autoregressive mode ------")
                 final_video, final_control = self._generate_autoregressive(batch, p)
@@ -149,12 +161,12 @@ class MultiviewInference:
         if p.n_views == 6:
             grid = create_video_grid(
                 [
-                    video_segments[1],
-                    video_segments[0],  
-                    video_segments[2],
-                    video_segments[4],
                     video_segments[5],
+                    video_segments[0],  
+                    video_segments[1],
+                    video_segments[4],
                     video_segments[3],
+                    video_segments[2],
                 ],
                 n_row=2,
             )
@@ -162,13 +174,13 @@ class MultiviewInference:
         elif p.n_views == 7:
             grid = create_video_grid(
                 [
-                    video_segments[1],
+                    video_segments[5],
                     video_segments[0],
                     video_segments[6],
-                    video_segments[2],
+                    video_segments[1],
                     video_segments[4],
-                    video_segments[5],
                     video_segments[3],
+                    video_segments[2],
                 ],
                 n_row=2,
             )
@@ -178,18 +190,18 @@ class MultiviewInference:
         log.info(f"Grid shape: {grid.shape}")
         # If control video is provided, create control grid and concatenate vertically
         if control_video is not None:
-            control_video = control_video.cpu().clamp(-1, 1) / 2 + 0.5
+            control_video = control_video.cpu().clamp(0.0, 1.0)# / 2 + 0.5
             control_segments = einops.rearrange(control_video, "c (v t) h w -> v t c h w", v=p.n_views)
             
             if p.n_views == 6:
                 control_grid = create_video_grid(
                     [
-                        control_segments[1],
+                        control_segments[5],
                         control_segments[0],  
-                        control_segments[2],
+                        control_segments[1],
                         control_segments[4],
                         control_segments[3],
-                        control_segments[5],
+                        control_segments[2],
                     ],
                     n_row=2,
                 )
@@ -197,13 +209,13 @@ class MultiviewInference:
             elif p.n_views == 7:
                 control_grid = create_video_grid(
                     [
-                        control_segments[1],
+                        control_segments[5],
                         control_segments[0],
                         control_segments[6],
-                        control_segments[2],
-                        control_segments[5],
-                        control_segments[3],
+                        control_segments[1],
                         control_segments[4],
+                        control_segments[3],
+                        control_segments[2],
                     ],
                     n_row=2,
                 )
@@ -276,7 +288,7 @@ class MultiviewInference:
                 start_frame, end_frame, n_views
             )
             if chunk_idx == 0:
-                chunk_batch["num_conditional_frames"] = params.num_conditional_frames
+                chunk_batch["num_conditional_frames"] = full_batch["num_conditional_frames"]
             else:
                 chunk_batch["num_conditional_frames"] = params.chunk_overlap
 
